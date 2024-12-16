@@ -1,9 +1,7 @@
 import cv2
 import mediapipe as mp
-import pyautogui
 import streamlit as st
 import threading
-import time
 
 # Gesture functions
 def count_fingers(lst):
@@ -21,15 +19,8 @@ def count_fingers(lst):
         cnt += 1
     return cnt
 
-def well_done(lst):
-    thumb_up = (lst.landmark[4].y < lst.landmark[3].y < lst.landmark[2].y)
-    pinky_up = (lst.landmark[20].y < lst.landmark[19].y)
-    all_other_fingers_down = all(lst.landmark[tip].y > lst.landmark[base].y
-                                 for tip, base in [(8, 6), (12, 10), (16, 14)])
-    return thumb_up and pinky_up and all_other_fingers_down
-
 # Gesture detection function
-def gesture_detection(running):
+def gesture_detection(running, callback):
     cap = cv2.VideoCapture(0)
     drawing = mp.solutions.drawing_utils
     hands = mp.solutions.hands
@@ -37,7 +28,7 @@ def gesture_detection(running):
 
     prev = -1
 
-    while running:
+    while running():
         _, frm = cap.read()
         frm = cv2.flip(frm, 1)
         res = hand_obj.process(cv2.cvtColor(frm, cv2.COLOR_BGR2RGB))
@@ -47,16 +38,7 @@ def gesture_detection(running):
             cnt = count_fingers(hand_keyPoints)
 
             if cnt != prev:
-                if cnt == 1:
-                    pyautogui.press("right")
-                elif cnt == 2:
-                    pyautogui.press("left")
-                elif cnt == 3:
-                    pyautogui.press("up")
-                elif cnt == 4:
-                    pyautogui.press("down")
-                elif cnt == 5:
-                    pyautogui.press("space")
+                callback(f"Detected {cnt} fingers.")
                 prev = cnt
 
             drawing.draw_landmarks(frm, hand_keyPoints, hands.HAND_CONNECTIONS)
@@ -74,12 +56,14 @@ st.title("Gesture Detection App")
 
 running = False
 detection_thread = None
+log = []
 
 def start_detection():
     global running, detection_thread
+
     if not running:
         running = True
-        detection_thread = threading.Thread(target=gesture_detection, args=(running,))
+        detection_thread = threading.Thread(target=gesture_detection, args=(lambda: running, update_log))
         detection_thread.start()
         st.success("Gesture Detection Started!")
     else:
@@ -87,13 +71,17 @@ def start_detection():
 
 def stop_detection():
     global running, detection_thread
+
     if running:
         running = False
-        detection_thread.join()  # Wait for the thread to finish
+        detection_thread.join()
         detection_thread = None
         st.success("Gesture Detection Stopped!")
     else:
         st.warning("No Gesture Detection is currently running.")
+
+def update_log(message):
+    log.append(message)
 
 # Add buttons for control
 if st.button("Start Detection"):
@@ -101,3 +89,8 @@ if st.button("Start Detection"):
 
 if st.button("Stop Detection"):
     stop_detection()
+
+# Display log
+st.write("Log:")
+for message in log[-5:]:  # Display the last 5 messages
+    st.write(message)
