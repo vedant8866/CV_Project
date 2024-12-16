@@ -1,11 +1,9 @@
 import cv2
 import mediapipe as mp
 import pyautogui
-import time
-import pywhatkit as kit
 import streamlit as st
-from threading import Thread
 import threading
+import time
 
 # Gesture functions
 def count_fingers(lst):
@@ -30,14 +28,6 @@ def well_done(lst):
                                  for tip, base in [(8, 6), (12, 10), (16, 14)])
     return thumb_up and pinky_up and all_other_fingers_down
 
-def send_whatsapp_message():
-    try:
-        kit.sendwhatmsg_instantly("+918468813811", "Hii, how are you doing?", 10)
-        time.sleep(10)  # Wait for WhatsApp Web to load
-        pyautogui.press("enter")  # Simulate pressing Enter to send the message
-    except Exception as e:
-        print(f"Error sending message: {e}")
-
 # Gesture detection function
 def gesture_detection(running):
     cap = cv2.VideoCapture(0)
@@ -45,7 +35,6 @@ def gesture_detection(running):
     hands = mp.solutions.hands
     hand_obj = hands.Hands(max_num_hands=1)
 
-    start_init = False
     prev = -1
 
     while running:
@@ -55,11 +44,8 @@ def gesture_detection(running):
 
         if res.multi_hand_landmarks:
             hand_keyPoints = res.multi_hand_landmarks[0]
-            if well_done(hand_keyPoints):
-                send_whatsapp_message()
-                time.sleep(3)  # Prevent repeated triggering
-
             cnt = count_fingers(hand_keyPoints)
+
             if cnt != prev:
                 if cnt == 1:
                     pyautogui.press("right")
@@ -72,6 +58,7 @@ def gesture_detection(running):
                 elif cnt == 5:
                     pyautogui.press("space")
                 prev = cnt
+
             drawing.draw_landmarks(frm, hand_keyPoints, hands.HAND_CONNECTIONS)
 
         cv2.imshow("Gesture Detection", frm)
@@ -90,20 +77,23 @@ detection_thread = None
 
 def start_detection():
     global running, detection_thread
-    running = True
-    detection_thread = threading.Thread(target=gesture_detection, args=(running,))
-    detection_thread.start()
-    st.success("Gesture Detection Started!")
+    if not running:
+        running = True
+        detection_thread = threading.Thread(target=gesture_detection, args=(running,))
+        detection_thread.start()
+        st.success("Gesture Detection Started!")
+    else:
+        st.warning("Gesture Detection is already running.")
 
 def stop_detection():
     global running, detection_thread
-    if detection_thread is not None:
+    if running:
         running = False
         detection_thread.join()  # Wait for the thread to finish
-        detection_thread = None  # Reset the thread
+        detection_thread = None
         st.success("Gesture Detection Stopped!")
     else:
-        st.warning("No gesture detection is running.")
+        st.warning("No Gesture Detection is currently running.")
 
 # Add buttons for control
 if st.button("Start Detection"):
